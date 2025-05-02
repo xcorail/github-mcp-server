@@ -38,9 +38,15 @@ func Test_ListDiscussions(t *testing.T) {
 				Pattern: "/repos/owner/repo/discussions",
 				Method:  "GET",
 			},
-			http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
-				_ = json.NewEncoder(w).Encode(mockDiscussions)
+				q := r.URL.Query()
+				switch q.Get("page") {
+				case "1":
+					_ = json.NewEncoder(w).Encode(mockDiscussions)
+				default:
+					_ = json.NewEncoder(w).Encode([]*github.Issue{})
+				}
 			}),
 		),
 	)
@@ -48,25 +54,63 @@ func Test_ListDiscussions(t *testing.T) {
 	client := github.NewClient(mockedClient)
 	_, handler := ListDiscussions(stubGetClientFn(client), translations.NullTranslationHelper)
 
-	request := createMCPRequest(map[string]interface{}{
-		"owner": "owner",
-		"repo":  "repo",
-	})
+	tests := []struct {
+		name          string
+		requestParams map[string]interface{}
+		expectedIDs   []int64
+		expectedState string
+	}{
+		{
+			name: "list all discussions",
+			requestParams: map[string]interface{}{
+				"owner": "owner",
+				"repo":  "repo",
+			},
+			expectedIDs: []int64{1, 2},
+		},
+		{
+			name: "list open discussions",
+			requestParams: map[string]interface{}{
+				"owner": "owner",
+				"repo":  "repo",
+				"state": "open",
+			},
+			expectedIDs:   []int64{1},
+			expectedState: "open",
+		},
+		{
+			name: "list closed discussions",
+			requestParams: map[string]interface{}{
+				"owner": "owner",
+				"repo":  "repo",
+				"state": "closed",
+			},
+			expectedIDs:   []int64{2},
+			expectedState: "closed",
+		},
+	}
 
-	result, err := handler(context.Background(), request)
-	require.NoError(t, err)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			request := createMCPRequest(tc.requestParams)
+			result, err := handler(context.Background(), request)
+			require.NoError(t, err)
 
-	textContent := getTextResult(t, result)
+			textContent := getTextResult(t, result)
 
-	var returnedDiscussions []*github.Issue
-	err = json.Unmarshal([]byte(textContent.Text), &returnedDiscussions)
-	require.NoError(t, err)
-	assert.Len(t, returnedDiscussions, len(mockDiscussions))
-	for i, discussion := range returnedDiscussions {
-		assert.Equal(t, *mockDiscussions[i].ID, *discussion.ID)
-		assert.Equal(t, *mockDiscussions[i].HTMLURL, *discussion.HTMLURL)
-		assert.Equal(t, *mockDiscussions[i].Body, *discussion.Body)
-		assert.Equal(t, *mockDiscussions[i].State, *discussion.State)
+			var returnedDiscussions []*github.Issue
+			err = json.Unmarshal([]byte(textContent.Text), &returnedDiscussions)
+			require.NoError(t, err)
+
+			assert.Len(t, returnedDiscussions, len(tc.expectedIDs))
+
+			for i, discussion := range returnedDiscussions {
+				assert.Equal(t, tc.expectedIDs[i], *discussion.ID)
+				if tc.expectedState != "" {
+					assert.Equal(t, tc.expectedState, *discussion.State)
+				}
+			}
+		})
 	}
 }
 

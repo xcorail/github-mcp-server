@@ -130,6 +130,9 @@ func ListDiscussions(getClient GetClientFn, t translations.TranslationHelperFunc
 				mcp.Description("Repository name"),
 			),
 			WithPagination(),
+			mcp.WithString("state",
+				mcp.Description("State filter (open, closed, all)"),
+			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			owner, err := requiredParam[string](request, "owner")
@@ -149,21 +152,95 @@ func ListDiscussions(getClient GetClientFn, t translations.TranslationHelperFunc
 			// Convert *github.Client to *http.Client
 			httpClient := client.Client()
 
-			// Extract pagination parameters
-			var page, perPage int
+			// Extract pagination parameters requested by the user
+			var requestedPage, requestedPerPage int
 			if p, ok := request.Params.Arguments["page"].(float64); ok {
-				page = int(p)
+				requestedPage = int(p)
 			}
 			if pp, ok := request.Params.Arguments["perPage"].(float64); ok {
-				perPage = int(pp)
+				requestedPerPage = int(pp)
 			}
 
-			discussions, err := ghAPIListDiscussions(ctx, httpClient, owner, repo, page, perPage)
-			if err != nil {
-				return nil, fmt.Errorf("failed to list discussions: %w", err)
+			// Default pagination values if not specified
+			if requestedPage <= 0 {
+				requestedPage = 1
+			}
+			if requestedPerPage <= 0 {
+				requestedPerPage = 30 // GitHub API default
 			}
 
-			r, err := json.Marshal(discussions)
+			// Extract state parameter (default to "all" if not provided)
+			state := "all"
+			if s, ok := request.Params.Arguments["state"].(string); ok && s != "" {
+				state = s
+			}
+
+			// For state filtering we need to retrieve all discussions across multiple pages
+			// and then apply pagination to the filtered results
+			allDiscussions := []*github.Issue{}
+
+			// Fetch all pages when state filtering is needed (state != "all")
+			// Otherwise, just fetch the requested page
+			if state != "all" {
+				currentPage := 1
+				perPageForFetching := 100 // Maximum allowed by GitHub API
+
+				for {
+					pageDiscussions, err := ghAPIListDiscussions(ctx, httpClient, owner, repo, currentPage, perPageForFetching)
+					if err != nil {
+						return nil, fmt.Errorf("failed to list discussions on page %d: %w", currentPage, err)
+					}
+
+					// No more discussions to fetch
+					if len(pageDiscussions) == 0 {
+						break
+					}
+
+					allDiscussions = append(allDiscussions, pageDiscussions...)
+					currentPage++
+
+					// Check context cancellation between page fetches
+					select {
+					case <-ctx.Done():
+						return nil, ctx.Err()
+					default:
+					}
+				}
+
+				// Apply state filter to all discussions
+				filteredDiscussions := make([]*github.Issue, 0, len(allDiscussions))
+				for _, discussion := range allDiscussions {
+					if discussion.GetState() == state {
+						filteredDiscussions = append(filteredDiscussions, discussion)
+					}
+				}
+
+				// Apply pagination to filtered results
+				startIndex := (requestedPage - 1) * requestedPerPage
+				endIndex := startIndex + requestedPerPage
+
+				// Ensure bounds are within array limits
+				if startIndex >= len(filteredDiscussions) {
+					// Page is beyond available results, return empty array
+					filteredDiscussions = []*github.Issue{}
+				} else {
+					if endIndex > len(filteredDiscussions) {
+						endIndex = len(filteredDiscussions)
+					}
+					filteredDiscussions = filteredDiscussions[startIndex:endIndex]
+				}
+
+				allDiscussions = filteredDiscussions
+			} else {
+				// No state filtering, use the standard GitHub API pagination
+				discussions, err := ghAPIListDiscussions(ctx, httpClient, owner, repo, requestedPage, requestedPerPage)
+				if err != nil {
+					return nil, fmt.Errorf("failed to list discussions: %w", err)
+				}
+				allDiscussions = discussions
+			}
+
+			r, err := json.Marshal(allDiscussions)
 			if err != nil {
 				return nil, fmt.Errorf("failed to marshal discussions: %w", err)
 			}
