@@ -15,8 +15,8 @@ import (
 
 // Helpers implemented as GitHub API calls, as discussions are not available in the Go client library
 
-func ghAPIListDiscussions(ctx context.Context, client *http.Client, owner, repo string) ([]*github.Issue, error) {
-	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/discussions", owner, repo)
+func ghAPIListDiscussions(ctx context.Context, client *http.Client, owner, repo string, page, perPage int) ([]*github.Issue, error) {
+	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/discussions?page=%d&per_page=%d", owner, repo, page, perPage)
 	// Create a new HTTP request
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -129,6 +129,7 @@ func ListDiscussions(getClient GetClientFn, t translations.TranslationHelperFunc
 				mcp.Required(),
 				mcp.Description("Repository name"),
 			),
+			WithPagination(),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			owner, err := requiredParam[string](request, "owner")
@@ -148,7 +149,16 @@ func ListDiscussions(getClient GetClientFn, t translations.TranslationHelperFunc
 			// Convert *github.Client to *http.Client
 			httpClient := client.Client()
 
-			discussions, err := ghAPIListDiscussions(ctx, httpClient, owner, repo)
+			// Extract pagination parameters
+			var page, perPage int
+			if p, ok := request.Params.Arguments["page"].(float64); ok {
+				page = int(p)
+			}
+			if pp, ok := request.Params.Arguments["perPage"].(float64); ok {
+				perPage = int(pp)
+			}
+
+			discussions, err := ghAPIListDiscussions(ctx, httpClient, owner, repo, page, perPage)
 			if err != nil {
 				return nil, fmt.Errorf("failed to list discussions: %w", err)
 			}

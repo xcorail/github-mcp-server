@@ -70,6 +70,56 @@ func Test_ListDiscussions(t *testing.T) {
 	}
 }
 
+// Test pagination behavior for ListDiscussions
+func Test_ListDiscussions_Pagination(t *testing.T) {
+	mockDiscussions := []*github.Issue{
+		{ID: github.Ptr(int64(1)), HTMLURL: github.Ptr("url1")},
+		{ID: github.Ptr(int64(2)), HTMLURL: github.Ptr("url2")},
+	}
+
+	// Single mock handler: dispatch based on query parameters
+	mockedClient := mock.NewMockedHTTPClient(
+		mock.WithRequestMatchHandler(
+			mock.EndpointPattern{Pattern: "/repos/owner/repo/discussions", Method: "GET"},
+			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+				q := r.URL.Query()
+				switch q.Get("page") {
+				case "2":
+					_ = json.NewEncoder(w).Encode(mockDiscussions[1:])
+				default:
+					_ = json.NewEncoder(w).Encode(mockDiscussions[:1])
+				}
+			}),
+		),
+	)
+	client := github.NewClient(mockedClient)
+	_, handler := ListDiscussions(stubGetClientFn(client), translations.NullTranslationHelper)
+
+	cases := []struct {
+		name      string
+		page, per float64
+		expectIDs []int64
+	}{
+		{"page1", float64(1), float64(1), []int64{1}},
+		{"page2", float64(2), float64(1), []int64{2}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := createMCPRequest(map[string]interface{}{"owner": "owner", "repo": "repo", "page": tc.page, "perPage": tc.per})
+			res, err := handler(context.Background(), req)
+			require.NoError(t, err)
+			text := getTextResult(t, res).Text
+			var out []*github.Issue
+			require.NoError(t, json.Unmarshal([]byte(text), &out))
+			assert.Len(t, out, len(tc.expectIDs))
+			for i, id := range tc.expectIDs {
+				assert.Equal(t, id, *out[i].ID)
+			}
+		})
+	}
+}
+
 // Verify tool definition for GetDiscussion
 func Test_GetDiscussion(t *testing.T) {
 	mockClient := github.NewClient(nil)
