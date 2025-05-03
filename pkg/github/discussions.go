@@ -15,6 +15,7 @@ import (
 )
 
 // Helpers implemented as GitHub API calls, as discussions are not available in the Go client library
+// This toolset is deliberately limited to a few basic functions. The plan is to first implement native support in the GitHub go library, then use it for a better and consistent support in the MCP server.
 
 func ghAPIListDiscussions(ctx context.Context, client *http.Client, owner, repo string, page, perPage int) ([]*github.Issue, error) {
 	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/discussions?page=%d&per_page=%d", owner, repo, page, perPage)

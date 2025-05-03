@@ -1,0 +1,4 @@
+#!/bin/bash
+
+# echo '{"jsonrpc":"2.0","id":3,"params":{"name":"list_discussions","arguments": {"owner": "github", "repo": "securitylab", "perPage": 1, "page": 1, "state": "open", "labels": [<your-labels-here>], "since": "2024-06-01T00:00:00Z"}},"method":"tools/call"}' | go run  cmd/github-mcp-server/main.go stdio  | jq .
+echo '{"jsonrpc":"2.0","id":3,"params":{"name":"list_discussions","arguments": {"owner": "github", "repo": "securitylab", "perPage": 10, "page": 1, "state": "open", "since": "2024-06-01T00:00:00Z"}},"method":"tools/call"}' | go run  cmd/github-mcp-server/main.go stdio  | jq .
