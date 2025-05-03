@@ -133,6 +133,14 @@ func ListDiscussions(getClient GetClientFn, t translations.TranslationHelperFunc
 			mcp.WithString("state",
 				mcp.Description("State filter (open, closed, all)"),
 			),
+			mcp.WithArray("labels",
+				mcp.Description("Filter by labels"),
+				mcp.Items(
+					map[string]interface{}{
+						"type": "string",
+					},
+				),
+			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			owner, err := requiredParam[string](request, "owner")
@@ -175,13 +183,20 @@ func ListDiscussions(getClient GetClientFn, t translations.TranslationHelperFunc
 				state = s
 			}
 
-			// For state filtering we need to retrieve all discussions across multiple pages
+			// Extract labels parameter
+			labels, err := OptionalStringArrayParam(request, "labels")
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("Invalid labels parameter: %v", err)), nil
+			}
+
+			// Determine if we need to fetch all pages for post-filtering
+			needAllPages := state != "all" || len(labels) > 0
+
+			// For state filtering or label filtering we need to retrieve all discussions across multiple pages
 			// and then apply pagination to the filtered results
 			allDiscussions := []*github.Issue{}
 
-			// Fetch all pages when state filtering is needed (state != "all")
-			// Otherwise, just fetch the requested page
-			if state != "all" {
+			if needAllPages {
 				currentPage := 1
 				perPageForFetching := 100 // Maximum allowed by GitHub API
 
@@ -207,12 +222,39 @@ func ListDiscussions(getClient GetClientFn, t translations.TranslationHelperFunc
 					}
 				}
 
-				// Apply state filter to all discussions
+				// Apply filters to all discussions
 				filteredDiscussions := make([]*github.Issue, 0, len(allDiscussions))
 				for _, discussion := range allDiscussions {
-					if discussion.GetState() == state {
-						filteredDiscussions = append(filteredDiscussions, discussion)
+					// Filter by state if specified
+					if state != "all" && discussion.GetState() != state {
+						continue
 					}
+
+					// Filter by labels if specified
+					if len(labels) > 0 {
+						// Check if discussion has all required labels
+						hasAllLabels := true
+						discussionLabels := make(map[string]bool)
+
+						// Build a map of the discussion's labels for efficient lookup
+						for _, label := range discussion.Labels {
+							discussionLabels[*label.Name] = true
+						}
+
+						// Check if all required labels are present
+						for _, requiredLabel := range labels {
+							if !discussionLabels[requiredLabel] {
+								hasAllLabels = false
+								break
+							}
+						}
+
+						if !hasAllLabels {
+							continue
+						}
+					}
+
+					filteredDiscussions = append(filteredDiscussions, discussion)
 				}
 
 				// Apply pagination to filtered results
@@ -232,7 +274,7 @@ func ListDiscussions(getClient GetClientFn, t translations.TranslationHelperFunc
 
 				allDiscussions = filteredDiscussions
 			} else {
-				// No state filtering, use the standard GitHub API pagination
+				// No filtering, use the standard GitHub API pagination
 				discussions, err := ghAPIListDiscussions(ctx, httpClient, owner, repo, requestedPage, requestedPerPage)
 				if err != nil {
 					return nil, fmt.Errorf("failed to list discussions: %w", err)

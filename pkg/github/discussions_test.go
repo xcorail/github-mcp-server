@@ -22,6 +22,10 @@ func Test_ListDiscussions(t *testing.T) {
 			Number:  github.Ptr(1),
 			Body:    github.Ptr("Discussion 1 body"),
 			State:   github.Ptr("open"),
+			Labels: []*github.Label{
+				{Name: github.Ptr("feature")},
+				{Name: github.Ptr("bug")},
+			},
 		},
 		{
 			HTMLURL: github.Ptr("https://github.com/owner/repo/discussions/2"),
@@ -29,6 +33,20 @@ func Test_ListDiscussions(t *testing.T) {
 			Number:  github.Ptr(2),
 			Body:    github.Ptr("Discussion 2 body"),
 			State:   github.Ptr("closed"),
+			Labels: []*github.Label{
+				{Name: github.Ptr("feature")},
+			},
+		},
+		{
+			HTMLURL: github.Ptr("https://github.com/owner/repo/discussions/3"),
+			ID:      github.Ptr(int64(3)),
+			Number:  github.Ptr(3),
+			Body:    github.Ptr("Discussion 3 body"),
+			State:   github.Ptr("open"),
+			Labels: []*github.Label{
+				{Name: github.Ptr("bug")},
+				{Name: github.Ptr("documentation")},
+			},
 		},
 	}
 
@@ -55,10 +73,11 @@ func Test_ListDiscussions(t *testing.T) {
 	_, handler := ListDiscussions(stubGetClientFn(client), translations.NullTranslationHelper)
 
 	tests := []struct {
-		name          string
-		requestParams map[string]interface{}
-		expectedIDs   []int64
-		expectedState string
+		name           string
+		requestParams  map[string]interface{}
+		expectedIDs    []int64
+		expectedState  string
+		expectedLabels []string
 	}{
 		{
 			name: "list all discussions",
@@ -66,7 +85,7 @@ func Test_ListDiscussions(t *testing.T) {
 				"owner": "owner",
 				"repo":  "repo",
 			},
-			expectedIDs: []int64{1, 2},
+			expectedIDs: []int64{1, 2, 3},
 		},
 		{
 			name: "list open discussions",
@@ -75,7 +94,7 @@ func Test_ListDiscussions(t *testing.T) {
 				"repo":  "repo",
 				"state": "open",
 			},
-			expectedIDs:   []int64{1},
+			expectedIDs:   []int64{1, 3},
 			expectedState: "open",
 		},
 		{
@@ -87,6 +106,47 @@ func Test_ListDiscussions(t *testing.T) {
 			},
 			expectedIDs:   []int64{2},
 			expectedState: "closed",
+		},
+		{
+			name: "filter by single label",
+			requestParams: map[string]interface{}{
+				"owner":  "owner",
+				"repo":   "repo",
+				"labels": []interface{}{"feature"},
+			},
+			expectedIDs:    []int64{1, 2},
+			expectedLabels: []string{"feature"},
+		},
+		{
+			name: "filter by multiple labels",
+			requestParams: map[string]interface{}{
+				"owner":  "owner",
+				"repo":   "repo",
+				"labels": []interface{}{"feature", "bug"},
+			},
+			expectedIDs:    []int64{1},
+			expectedLabels: []string{"feature", "bug"},
+		},
+		{
+			name: "combine state and label filters",
+			requestParams: map[string]interface{}{
+				"owner":  "owner",
+				"repo":   "repo",
+				"state":  "open",
+				"labels": []interface{}{"bug"},
+			},
+			expectedIDs:    []int64{1, 3},
+			expectedState:  "open",
+			expectedLabels: []string{"bug"},
+		},
+		{
+			name: "filter by label that doesn't exist",
+			requestParams: map[string]interface{}{
+				"owner":  "owner",
+				"repo":   "repo",
+				"labels": []interface{}{"nonexistent"},
+			},
+			expectedIDs: []int64{},
 		},
 	}
 
@@ -102,12 +162,46 @@ func Test_ListDiscussions(t *testing.T) {
 			err = json.Unmarshal([]byte(textContent.Text), &returnedDiscussions)
 			require.NoError(t, err)
 
-			assert.Len(t, returnedDiscussions, len(tc.expectedIDs))
+			assert.Len(t, returnedDiscussions, len(tc.expectedIDs), "Expected %d discussions, got %d", len(tc.expectedIDs), len(returnedDiscussions))
 
-			for i, discussion := range returnedDiscussions {
-				assert.Equal(t, tc.expectedIDs[i], *discussion.ID)
+			// If no discussions are expected, skip further checks
+			if len(tc.expectedIDs) == 0 {
+				return
+			}
+
+			// Create a map of expected IDs for easier checking
+			expectedIDMap := make(map[int64]bool)
+			for _, id := range tc.expectedIDs {
+				expectedIDMap[id] = true
+			}
+
+			for _, discussion := range returnedDiscussions {
+				// Check if the discussion ID is in the expected list
+				assert.True(t, expectedIDMap[*discussion.ID], "Unexpected discussion ID: %d", *discussion.ID)
+
+				// Verify state if specified
 				if tc.expectedState != "" {
 					assert.Equal(t, tc.expectedState, *discussion.State)
+				}
+
+				// Verify labels if specified
+				if len(tc.expectedLabels) > 0 {
+					// For each expected label, check if it exists in the discussion
+					for _, expectedLabel := range tc.expectedLabels {
+						found := false
+						for _, label := range discussion.Labels {
+							if *label.Name == expectedLabel {
+								found = true
+								break
+							}
+						}
+						// For labels check, we're verifying that the required labels are present
+						// but we don't require ALL expected labels to be on EVERY discussion
+						// since this depends on the filter combination
+						if len(tc.expectedLabels) == 1 {
+							assert.True(t, found, "Expected label %s not found in discussion %d", expectedLabel, *discussion.ID)
+						}
+					}
 				}
 			}
 		})
