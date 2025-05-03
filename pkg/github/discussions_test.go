@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/google/go-github/v69/github"
@@ -15,34 +16,41 @@ import (
 
 // Test for ListDiscussions
 func Test_ListDiscussions(t *testing.T) {
+	creationTime1 := github.Timestamp{Time: time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)}
+	creationTime2 := github.Timestamp{Time: time.Date(2023, 2, 1, 0, 0, 0, 0, time.UTC)}
+	creationTime3 := github.Timestamp{Time: time.Date(2023, 3, 1, 0, 0, 0, 0, time.UTC)}
+
 	mockDiscussions := []*github.Issue{
 		{
-			HTMLURL: github.Ptr("https://github.com/owner/repo/discussions/1"),
-			ID:      github.Ptr(int64(1)),
-			Number:  github.Ptr(1),
-			Body:    github.Ptr("Discussion 1 body"),
-			State:   github.Ptr("open"),
+			HTMLURL:   github.Ptr("https://github.com/owner/repo/discussions/1"),
+			ID:        github.Ptr(int64(1)),
+			Number:    github.Ptr(1),
+			Body:      github.Ptr("Discussion 1 body"),
+			State:     github.Ptr("open"),
+			CreatedAt: &creationTime1,
 			Labels: []*github.Label{
 				{Name: github.Ptr("feature")},
 				{Name: github.Ptr("bug")},
 			},
 		},
 		{
-			HTMLURL: github.Ptr("https://github.com/owner/repo/discussions/2"),
-			ID:      github.Ptr(int64(2)),
-			Number:  github.Ptr(2),
-			Body:    github.Ptr("Discussion 2 body"),
-			State:   github.Ptr("closed"),
+			HTMLURL:   github.Ptr("https://github.com/owner/repo/discussions/2"),
+			ID:        github.Ptr(int64(2)),
+			Number:    github.Ptr(2),
+			Body:      github.Ptr("Discussion 2 body"),
+			State:     github.Ptr("closed"),
+			CreatedAt: &creationTime2,
 			Labels: []*github.Label{
 				{Name: github.Ptr("feature")},
 			},
 		},
 		{
-			HTMLURL: github.Ptr("https://github.com/owner/repo/discussions/3"),
-			ID:      github.Ptr(int64(3)),
-			Number:  github.Ptr(3),
-			Body:    github.Ptr("Discussion 3 body"),
-			State:   github.Ptr("open"),
+			HTMLURL:   github.Ptr("https://github.com/owner/repo/discussions/3"),
+			ID:        github.Ptr(int64(3)),
+			Number:    github.Ptr(3),
+			Body:      github.Ptr("Discussion 3 body"),
+			State:     github.Ptr("open"),
+			CreatedAt: &creationTime3,
 			Labels: []*github.Label{
 				{Name: github.Ptr("bug")},
 				{Name: github.Ptr("documentation")},
@@ -78,6 +86,7 @@ func Test_ListDiscussions(t *testing.T) {
 		expectedIDs    []int64
 		expectedState  string
 		expectedLabels []string
+		sinceDate      string
 	}{
 		{
 			name: "list all discussions",
@@ -148,6 +157,72 @@ func Test_ListDiscussions(t *testing.T) {
 			},
 			expectedIDs: []int64{},
 		},
+		{
+			name: "filter by created date - get discussions after January 15, 2023",
+			requestParams: map[string]interface{}{
+				"owner": "owner",
+				"repo":  "repo",
+				"since": "2023-01-15T00:00:00Z",
+			},
+			expectedIDs: []int64{2, 3},
+			sinceDate:   "2023-01-15T00:00:00Z",
+		},
+		{
+			name: "filter by created date - get discussions after February 15, 2023",
+			requestParams: map[string]interface{}{
+				"owner": "owner",
+				"repo":  "repo",
+				"since": "2023-02-15T00:00:00Z",
+			},
+			expectedIDs: []int64{3},
+			sinceDate:   "2023-02-15T00:00:00Z",
+		},
+		{
+			name: "filter by created date with simple date format",
+			requestParams: map[string]interface{}{
+				"owner": "owner",
+				"repo":  "repo",
+				"since": "2023-02-01",
+			},
+			expectedIDs: []int64{2, 3},
+			sinceDate:   "2023-02-01",
+		},
+		{
+			name: "combine date and state filters",
+			requestParams: map[string]interface{}{
+				"owner": "owner",
+				"repo":  "repo",
+				"state": "open",
+				"since": "2023-01-15T00:00:00Z",
+			},
+			expectedIDs:   []int64{3},
+			expectedState: "open",
+			sinceDate:     "2023-01-15T00:00:00Z",
+		},
+		{
+			name: "combine date, state, and label filters",
+			requestParams: map[string]interface{}{
+				"owner":  "owner",
+				"repo":   "repo",
+				"state":  "open",
+				"labels": []interface{}{"bug"},
+				"since":  "2023-01-01T00:00:00Z",
+			},
+			expectedIDs:    []int64{1, 3},
+			expectedState:  "open",
+			expectedLabels: []string{"bug"},
+			sinceDate:      "2023-01-01T00:00:00Z",
+		},
+		{
+			name: "filter by date that excludes all discussions",
+			requestParams: map[string]interface{}{
+				"owner": "owner",
+				"repo":  "repo",
+				"since": "2024-01-01T00:00:00Z",
+			},
+			expectedIDs: []int64{},
+			sinceDate:   "2024-01-01T00:00:00Z",
+		},
 	}
 
 	for _, tc := range tests {
@@ -202,6 +277,17 @@ func Test_ListDiscussions(t *testing.T) {
 							assert.True(t, found, "Expected label %s not found in discussion %d", expectedLabel, *discussion.ID)
 						}
 					}
+				}
+
+				// Verify creation date if specified
+				if tc.sinceDate != "" {
+					sinceTime, err := parseISOTimestamp(tc.sinceDate)
+					require.NoError(t, err)
+					assert.False(t, discussion.GetCreatedAt().Before(sinceTime),
+						"Discussion %d was created at %s, which is before %s",
+						*discussion.ID,
+						discussion.GetCreatedAt().Format(time.RFC3339),
+						sinceTime.Format(time.RFC3339))
 				}
 			}
 		})

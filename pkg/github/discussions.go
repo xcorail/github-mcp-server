@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/google/go-github/v64/github"
@@ -141,6 +142,9 @@ func ListDiscussions(getClient GetClientFn, t translations.TranslationHelperFunc
 					},
 				),
 			),
+			mcp.WithString("since",
+				mcp.Description("Filter by date (ISO 8601 timestamp)"),
+			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			owner, err := requiredParam[string](request, "owner")
@@ -189,10 +193,25 @@ func ListDiscussions(getClient GetClientFn, t translations.TranslationHelperFunc
 				return mcp.NewToolResultError(fmt.Sprintf("Invalid labels parameter: %v", err)), nil
 			}
 
-			// Determine if we need to fetch all pages for post-filtering
-			needAllPages := state != "all" || len(labels) > 0
+			// Extract since parameter for created_at filtering
+			since, err := OptionalParam[string](request, "since")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 
-			// For state filtering or label filtering we need to retrieve all discussions across multiple pages
+			// Parse the timestamp if provided
+			var sinceTimestamp time.Time
+			if since != "" {
+				sinceTimestamp, err = parseISOTimestamp(since)
+				if err != nil {
+					return mcp.NewToolResultError(fmt.Sprintf("failed to list discussions: %s", err.Error())), nil
+				}
+			}
+
+			// Determine if we need to fetch all pages for post-filtering
+			needAllPages := state != "all" || len(labels) > 0 || since != ""
+
+			// For state filtering, label filtering, or date filtering, we need to retrieve all discussions across multiple pages
 			// and then apply pagination to the filtered results
 			allDiscussions := []*github.Issue{}
 
@@ -250,6 +269,14 @@ func ListDiscussions(getClient GetClientFn, t translations.TranslationHelperFunc
 						}
 
 						if !hasAllLabels {
+							continue
+						}
+					}
+
+					// Filter by creation date if specified
+					if !sinceTimestamp.IsZero() {
+						createdAt := discussion.GetCreatedAt()
+						if createdAt.Before(sinceTimestamp) {
 							continue
 						}
 					}
