@@ -401,7 +401,7 @@ func Test_GetDiscussion(t *testing.T) {
 			requestArgs: map[string]interface{}{
 				"owner":         "owner",
 				"repo":          "repo",
-				"discussion_id": int(1),
+				"discussion_id": float64(1),
 			},
 			expectError:    false,
 			expectedResult: mockDiscussion,
@@ -423,7 +423,7 @@ func Test_GetDiscussion(t *testing.T) {
 			requestArgs: map[string]interface{}{
 				"owner":         "owner",
 				"repo":          "repo",
-				"discussion_id": int(999),
+				"discussion_id": float64(999),
 			},
 			expectError:    true,
 			expectedErrMsg: "failed to get discussion",
@@ -496,7 +496,7 @@ func Test_GetDiscussionComments(t *testing.T) {
 	request := createMCPRequest(map[string]interface{}{
 		"owner":         "owner",
 		"repo":          "repo",
-		"discussion_id": 1,
+		"discussion_id": float64(1),
 	})
 
 	result, err := handler(context.Background(), request)
