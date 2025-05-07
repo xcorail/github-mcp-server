@@ -348,7 +348,7 @@ func GetDiscussion(getClient GetClientFn, t translations.TranslationHelperFunc) 
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			discussionID, err := requiredParam[int](request, "discussion_id")
+			discussionID, err := RequiredInt(request, "discussion_id")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -401,7 +401,7 @@ func GetDiscussionComments(getClient GetClientFn, t translations.TranslationHelp
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			discussionID, err := requiredParam[int](request, "discussion_id")
+			discussionID, err := RequiredInt(request, "discussion_id")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
