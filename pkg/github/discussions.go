@@ -59,7 +59,7 @@ func ListDiscussions(getGQLClient GetGQLClientFn, t translations.TranslationHelp
 			var params struct {
 				Owner      string
 				Repo       string
-				CategoryId string
+				CategoryID string
 				Since      string
 				Sort       string
 				Direction  string
@@ -94,7 +94,7 @@ func ListDiscussions(getGQLClient GetGQLClientFn, t translations.TranslationHelp
 			vars := map[string]interface{}{
 				"owner":      githubv4.String(params.Owner),
 				"repo":       githubv4.String(params.Repo),
-				"categoryId": githubv4.ID(params.CategoryId),
+				"categoryId": githubv4.ID(params.CategoryID),
 				"sort":       githubv4.DiscussionOrderField(params.Sort),
 				"direction":  githubv4.OrderDirection(params.Direction),
 				"first":      githubv4.Int(params.First),
@@ -155,25 +155,21 @@ func GetDiscussion(getGQLClient GetGQLClientFn, t translations.TranslationHelper
 				mcp.Required(),
 				mcp.Description("Repository name"),
 			),
-			mcp.WithNumber("discussion_id",
+			mcp.WithNumber("discussionNumber",
 				mcp.Required(),
-				mcp.Description("Discussion ID"),
+				mcp.Description("Discussion Number"),
 			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			owner, err := requiredParam[string](request, "owner")
-			if err != nil {
+			// Decode params
+			var params struct {
+				Owner            string
+				Repo             string
+				DiscussionNumber int32
+			}
+			if err := mapstructure.Decode(request.Params.Arguments, &params); err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			repo, err := requiredParam[string](request, "repo")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			discussionID, err := RequiredInt(request, "discussion_id")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-
 			client, err := getGQLClient(ctx)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("failed to get GitHub GQL client: %v", err)), nil
@@ -187,13 +183,13 @@ func GetDiscussion(getGQLClient GetGQLClientFn, t translations.TranslationHelper
 						State     githubv4.String
 						CreatedAt githubv4.DateTime
 						URL       githubv4.String `graphql:"url"`
-					} `graphql:"discussion(number: $discussionID)"`
+					} `graphql:"discussion(number: $discussionNumber)"`
 				} `graphql:"repository(owner: $owner, name: $repo)"`
 			}
 			vars := map[string]interface{}{
-				"owner":        githubv4.String(owner),
-				"repo":         githubv4.String(repo),
-				"discussionID": githubv4.Int(discussionID),
+				"owner":            githubv4.String(params.Owner),
+				"repo":             githubv4.String(params.Repo),
+				"discussionNumber": githubv4.Int(params.DiscussionNumber),
 			}
 			if err := client.Query(ctx, &q, vars); err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
@@ -224,19 +220,16 @@ func GetDiscussionComments(getGQLClient GetGQLClientFn, t translations.Translati
 			}),
 			mcp.WithString("owner", mcp.Required(), mcp.Description("Repository owner")),
 			mcp.WithString("repo", mcp.Required(), mcp.Description("Repository name")),
-			mcp.WithNumber("discussion_id", mcp.Required(), mcp.Description("Discussion ID")),
+			mcp.WithNumber("discussionNumber", mcp.Required(), mcp.Description("Discussion Number")),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			owner, err := requiredParam[string](request, "owner")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
+			// Decode params
+			var params struct {
+				Owner            string
+				Repo             string
+				DiscussionNumber int32
 			}
-			repo, err := requiredParam[string](request, "repo")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			discussionID, err := RequiredInt(request, "discussion_id")
-			if err != nil {
+			if err := mapstructure.Decode(request.Params.Arguments, &params); err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
@@ -253,13 +246,13 @@ func GetDiscussionComments(getGQLClient GetGQLClientFn, t translations.Translati
 								Body githubv4.String
 							}
 						} `graphql:"comments(first:100)"`
-					} `graphql:"discussion(number: $discussionID)"`
+					} `graphql:"discussion(number: $discussionNumber)"`
 				} `graphql:"repository(owner: $owner, name: $repo)"`
 			}
 			vars := map[string]interface{}{
-				"owner":        githubv4.String(owner),
-				"repo":         githubv4.String(repo),
-				"discussionID": githubv4.Int(discussionID),
+				"owner":            githubv4.String(params.Owner),
+				"repo":             githubv4.String(params.Repo),
+				"discussionNumber": githubv4.Int(params.DiscussionNumber),
 			}
 			if err := client.Query(ctx, &q, vars); err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
@@ -280,7 +273,7 @@ func GetDiscussionComments(getGQLClient GetGQLClientFn, t translations.Translati
 
 func ListDiscussionCategories(getGQLClient GetGQLClientFn, t translations.TranslationHelperFunc) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_discussion_categories",
-			mcp.WithDescription(t("TOOL_LIST_DISCUSSION_CATEGORIES_DESCRIPTION", "List discussion categorie with their id and name, for a repository")),
+			mcp.WithDescription(t("TOOL_LIST_DISCUSSION_CATEGORIES_DESCRIPTION", "List discussion categories with their id and name, for a repository")),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				Title:        t("TOOL_LIST_DISCUSSION_CATEGORIES_USER_TITLE", "List discussion categories"),
 				ReadOnlyHint: toBoolPtr(true),

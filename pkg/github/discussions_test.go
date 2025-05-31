@@ -196,8 +196,8 @@ func Test_GetDiscussion(t *testing.T) {
 	assert.NotEmpty(t, toolDef.Description)
 	assert.Contains(t, toolDef.InputSchema.Properties, "owner")
 	assert.Contains(t, toolDef.InputSchema.Properties, "repo")
-	assert.Contains(t, toolDef.InputSchema.Properties, "discussion_id")
-	assert.ElementsMatch(t, toolDef.InputSchema.Required, []string{"owner", "repo", "discussion_id"})
+	assert.Contains(t, toolDef.InputSchema.Properties, "discussionNumber")
+	assert.ElementsMatch(t, toolDef.InputSchema.Required, []string{"owner", "repo", "discussionNumber"})
 
 	var q struct {
 		Repository struct {
@@ -207,13 +207,13 @@ func Test_GetDiscussion(t *testing.T) {
 				State     githubv4.String
 				CreatedAt githubv4.DateTime
 				URL       githubv4.String `graphql:"url"`
-			} `graphql:"discussion(number: $discussionID)"`
+			} `graphql:"discussion(number: $discussionNumber)"`
 		} `graphql:"repository(owner: $owner, name: $repo)"`
 	}
 	vars := map[string]interface{}{
-		"owner":        githubv4.String("owner"),
-		"repo":         githubv4.String("repo"),
-		"discussionID": githubv4.Int(1),
+		"owner":            githubv4.String("owner"),
+		"repo":             githubv4.String("repo"),
+		"discussionNumber": githubv4.Int(1),
 	}
 	tests := []struct {
 		name        string
@@ -256,7 +256,7 @@ func Test_GetDiscussion(t *testing.T) {
 			gqlClient := githubv4.NewClient(httpClient)
 			_, handler := GetDiscussion(stubGetGQLClientFn(gqlClient), translations.NullTranslationHelper)
 
-			req := createMCPRequest(map[string]interface{}{"owner": "owner", "repo": "repo", "discussion_id": float64(1)})
+			req := createMCPRequest(map[string]interface{}{"owner": "owner", "repo": "repo", "discussionNumber": int32(1)})
 			res, err := handler(context.Background(), req)
 			text := getTextResult(t, res).Text
 
@@ -284,8 +284,8 @@ func Test_GetDiscussionComments(t *testing.T) {
 	assert.NotEmpty(t, toolDef.Description)
 	assert.Contains(t, toolDef.InputSchema.Properties, "owner")
 	assert.Contains(t, toolDef.InputSchema.Properties, "repo")
-	assert.Contains(t, toolDef.InputSchema.Properties, "discussion_id")
-	assert.ElementsMatch(t, toolDef.InputSchema.Required, []string{"owner", "repo", "discussion_id"})
+	assert.Contains(t, toolDef.InputSchema.Properties, "discussionNumber")
+	assert.ElementsMatch(t, toolDef.InputSchema.Required, []string{"owner", "repo", "discussionNumber"})
 
 	var q struct {
 		Repository struct {
@@ -295,13 +295,13 @@ func Test_GetDiscussionComments(t *testing.T) {
 						Body githubv4.String
 					}
 				} `graphql:"comments(first:100)"`
-			} `graphql:"discussion(number: $discussionID)"`
+			} `graphql:"discussion(number: $discussionNumber)"`
 		} `graphql:"repository(owner: $owner, name: $repo)"`
 	}
 	vars := map[string]interface{}{
-		"owner":        githubv4.String("owner"),
-		"repo":         githubv4.String("repo"),
-		"discussionID": githubv4.Int(1),
+		"owner":            githubv4.String("owner"),
+		"repo":             githubv4.String("repo"),
+		"discussionNumber": githubv4.Int(1),
 	}
 	mockResponse := githubv4mock.DataResponse(map[string]any{
 		"repository": map[string]any{
@@ -321,9 +321,9 @@ func Test_GetDiscussionComments(t *testing.T) {
 	_, handler := GetDiscussionComments(stubGetGQLClientFn(gqlClient), translations.NullTranslationHelper)
 
 	request := createMCPRequest(map[string]interface{}{
-		"owner":         "owner",
-		"repo":          "repo",
-		"discussion_id": float64(1),
+		"owner":            "owner",
+		"repo":             "repo",
+		"discussionNumber": int32(1),
 	})
 
 	result, err := handler(context.Background(), request)
