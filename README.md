@@ -630,7 +630,7 @@ export GITHUB_MCP_TOOL_ADD_ISSUE_COMMENT_DESCRIPTION="an alternative description
 - **get_discussion** - Get a specific discussion by ID
   - `owner`: Repository owner (string, required)
   - `repo`: Repository name (string, required)
-  - `discussion_id`: Discussion ID (number, required)
+  - `discussionNumber`: Discussion number (required)
 
 - **get_discussion_comments** - Get comments from a discussion
   - `owner`: Repository owner (string, required)
