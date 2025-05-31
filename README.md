@@ -149,7 +149,7 @@ The following sets of tools are available (all are on by default):
 | ----------------------- | ------------------------------------------------------------- |
 | `repos`                 | Repository-related tools (file operations, branches, commits) |
 | `issues`                | Issue-related tools (create, read, update, comment)           |
-| `discussions`           | GitHub Discussions tools (list, get, comments)                |
+| `discussions`           | GitHub Discussions tools (list, get, comments, categories)    |
 | `users`                 | Anything relating to GitHub Users                             |
 | `pull_requests`         | Pull request operations (create, merge, review)               |
 | `code_security`         | Code scanning alerts and security features                    |
@@ -582,7 +582,6 @@ export GITHUB_MCP_TOOL_ADD_ISSUE_COMMENT_DESCRIPTION="an alternative description
   - `secret_type`: The secret types to be filtered for in a comma-separated list (string, optional)
   - `resolution`: The resolution status (string, optional)
 
-<<<<<<< HEAD
 ### Notifications
 
 - **list_notifications** – List notifications for a GitHub user
@@ -616,21 +615,17 @@ export GITHUB_MCP_TOOL_ADD_ISSUE_COMMENT_DESCRIPTION="an alternative description
   - `repo`: The name of the repository (string, required)
   - `action`: Action to perform: `ignore`, `watch`, or `delete` (string, required)
 
-=======
->>>>>>> 8d6b84c (doc: add support for GitHub discussions, with an example.)
 ### Discussions
  
-> [!NOTE]  
-> As there is no support for discussions in the native GitHub go library, this toolset is deliberately limited to a few basic functions. The plan is to first implement native support in the GitHub go library, then use it for a better and consistent support in the MCP server.
-
 - **list_discussions** - List discussions for a repository
   - `owner`: Repository owner (string, required)
   - `repo`: Repository name (string, required)
-  - `state`: State filter (open, closed, all) (string, optional)
-  - `labels`: Filter by label names (string[], optional)
+  - `categoryId`: Filter by category ID (string, optional)
   - `since`: Filter by date (ISO 8601 timestamp) (string, optional)
-  - `page`: Page number (number, optional)
-  - `perPage`: Results per page (number, optional)
+  - `first`: Pagination - Number of records to retrieve (number, optional)
+  - `after`: Pagination - Cursor to start with (string, optional)
+  - `sort`: Sort by ('CREATED_AT', 'UPDATED_AT') (string, optional)
+  - `direction`: Sort direction ('ASC', 'DESC') (string, optional)
 
 - **get_discussion** - Get a specific discussion by ID
   - `owner`: Repository owner (string, required)
@@ -641,6 +636,10 @@ export GITHUB_MCP_TOOL_ADD_ISSUE_COMMENT_DESCRIPTION="an alternative description
   - `owner`: Repository owner (string, required)
   - `repo`: Repository name (string, required)
   - `discussion_id`: Discussion ID (number, required)
+
+- **list_discussion_categories** - List discussion categories for a repository, with their IDs and names
+  - `owner`: Repository owner (string, required)
+  - `repo`: Repository name (string, required)
 
 ## Resources
 
