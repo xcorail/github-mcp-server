@@ -61,6 +61,9 @@ func ListDiscussions(getGQLClient GetGQLClientFn, t translations.TranslationHelp
 			mcp.WithString("before",
 				mcp.Description("Cursor for pagination, use the 'before' field from the previous response"),
 			),
+			mcp.WithBoolean("answered",
+				mcp.Description("Filter by whether discussions have been answered or not"),
+			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			// Decode params
@@ -75,6 +78,7 @@ func ListDiscussions(getGQLClient GetGQLClientFn, t translations.TranslationHelp
 				Last       int32
 				After      string
 				Before     string
+				Answered   bool
 			}
 			if err := mapstructure.Decode(request.Params.Arguments, &params); err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
@@ -109,7 +113,7 @@ func ListDiscussions(getGQLClient GetGQLClientFn, t translations.TranslationHelp
 							} `graphql:"category"`
 							URL githubv4.String `graphql:"url"`
 						}
-					} `graphql:"discussions(categoryId: $categoryId, orderBy: {field: $sort, direction: $direction}, first: $first, after: $after, last: $last, before: $before)"`
+					} `graphql:"discussions(categoryId: $categoryId, orderBy: {field: $sort, direction: $direction}, first: $first, after: $after, last: $last, before: $before, answered: $answered)"`
 				} `graphql:"repository(owner: $owner, name: $repo)"`
 			}
 			// Build query variables
@@ -123,6 +127,7 @@ func ListDiscussions(getGQLClient GetGQLClientFn, t translations.TranslationHelp
 				"last":       githubv4.Int(params.Last),
 				"after":      githubv4.String(params.After),
 				"before":     githubv4.String(params.Before),
+				"answered":   githubv4.Boolean(params.Answered),
 			}
 			// Execute query
 			if err := client.Query(ctx, &q, vars); err != nil {

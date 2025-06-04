@@ -55,7 +55,7 @@ func Test_ListDiscussions(t *testing.T) {
 					} `graphql:"category"`
 					URL githubv4.String `graphql:"url"`
 				}
-			} `graphql:"discussions(categoryId: $categoryId, orderBy: {field: $sort, direction: $direction}, first: $first, after: $after, last: $last, before: $before)"`
+			} `graphql:"discussions(categoryId: $categoryId, orderBy: {field: $sort, direction: $direction}, first: $first, after: $after, last: $last, before: $before, answered: $answered)"`
 		} `graphql:"repository(owner: $owner, name: $repo)"`
 	}
 
@@ -69,6 +69,7 @@ func Test_ListDiscussions(t *testing.T) {
 		"last":       githubv4.Int(0),
 		"after":      githubv4.String(""),
 		"before":     githubv4.String(""),
+		"answered":   githubv4.Boolean(false),
 	}
 
 	varsListInvalid := map[string]interface{}{
@@ -81,6 +82,7 @@ func Test_ListDiscussions(t *testing.T) {
 		"last":       githubv4.Int(0),
 		"after":      githubv4.String(""),
 		"before":     githubv4.String(""),
+		"answered":   githubv4.Boolean(false),
 	}
 
 	varsListWithCategory := map[string]interface{}{
@@ -93,6 +95,7 @@ func Test_ListDiscussions(t *testing.T) {
 		"last":       githubv4.Int(0),
 		"after":      githubv4.String(""),
 		"before":     githubv4.String(""),
+		"answered":   githubv4.Boolean(false),
 	}
 
 	tests := []struct {

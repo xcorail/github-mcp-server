@@ -628,6 +628,7 @@ export GITHUB_MCP_TOOL_ADD_ISSUE_COMMENT_DESCRIPTION="an alternative description
   - `before`: Pagination - Cursor to end with (string, optional)
   - `sort`: Sort by ('CREATED_AT', 'UPDATED_AT') (string, optional)
   - `direction`: Sort direction ('ASC', 'DESC') (string, optional)
+  - `answered`: Filter by whether discussions have been answered or not (boolean, optional)
 
 - **get_discussion** - Get a specific discussion by ID
   - `owner`: Repository owner (string, required)
