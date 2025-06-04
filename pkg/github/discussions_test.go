@@ -410,12 +410,16 @@ func Test_ListDiscussionCategories(t *testing.T) {
 					ID   githubv4.ID
 					Name githubv4.String
 				}
-			} `graphql:"discussionCategories(first: 30)"`
+			} `graphql:"discussionCategories(first: $first, last: $last, after: $after, before: $before)"`
 		} `graphql:"repository(owner: $owner, name: $repo)"`
 	}
 	vars := map[string]interface{}{
-		"owner": githubv4.String("owner"),
-		"repo":  githubv4.String("repo"),
+		"owner":  githubv4.String("owner"),
+		"repo":   githubv4.String("repo"),
+		"first":  githubv4.Int(0),
+		"last":   githubv4.Int(0),
+		"after":  githubv4.String(""),
+		"before": githubv4.String(""),
 	}
 	mockResp := githubv4mock.DataResponse(map[string]any{
 		"repository": map[string]any{

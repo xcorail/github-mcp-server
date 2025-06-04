@@ -315,16 +315,51 @@ func ListDiscussionCategories(getGQLClient GetGQLClientFn, t translations.Transl
 				mcp.Required(),
 				mcp.Description("Repository name"),
 			),
+			mcp.WithNumber("first",
+				mcp.Description("Number of categories to return per page (min 1, max 100)"),
+				mcp.Min(1),
+				mcp.Max(100),
+			),
+			mcp.WithNumber("last",
+				mcp.Description("Number of categories to return from the end (min 1, max 100)"),
+				mcp.Min(1),
+				mcp.Max(100),
+			),
+			mcp.WithString("after",
+				mcp.Description("Cursor for pagination, use the 'after' field from the previous response"),
+			),
+			mcp.WithString("before",
+				mcp.Description("Cursor for pagination, use the 'before' field from the previous response"),
+			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			owner, err := requiredParam[string](request, "owner")
-			if err != nil {
+			// Decode params
+			var params struct {
+				Owner  string
+				Repo   string
+				First  int32
+				Last   int32
+				After  string
+				Before string
+			}
+			if err := mapstructure.Decode(request.Params.Arguments, &params); err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			repo, err := requiredParam[string](request, "repo")
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
+
+			// Validate pagination parameters
+			if params.First != 0 && params.Last != 0 {
+				return mcp.NewToolResultError("only one of 'first' or 'last' may be specified"), nil
 			}
+			if params.After != "" && params.Before != "" {
+				return mcp.NewToolResultError("only one of 'after' or 'before' may be specified"), nil
+			}
+			if params.After != "" && params.Last != 0 {
+				return mcp.NewToolResultError("'after' cannot be used with 'last'. Did you mean to use 'before' instead?"), nil
+			}
+			if params.Before != "" && params.First != 0 {
+				return mcp.NewToolResultError("'before' cannot be used with 'first'. Did you mean to use 'after' instead?"), nil
+			}
+
 			client, err := getGQLClient(ctx)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("failed to get GitHub GQL client: %v", err)), nil
@@ -336,12 +371,16 @@ func ListDiscussionCategories(getGQLClient GetGQLClientFn, t translations.Transl
 							ID   githubv4.ID
 							Name githubv4.String
 						}
-					} `graphql:"discussionCategories(first: 30)"`
+					} `graphql:"discussionCategories(first: $first, last: $last, after: $after, before: $before)"`
 				} `graphql:"repository(owner: $owner, name: $repo)"`
 			}
 			vars := map[string]interface{}{
-				"owner": githubv4.String(owner),
-				"repo":  githubv4.String(repo),
+				"owner":  githubv4.String(params.Owner),
+				"repo":   githubv4.String(params.Repo),
+				"first":  githubv4.Int(params.First),
+				"last":   githubv4.Int(params.Last),
+				"after":  githubv4.String(params.After),
+				"before": githubv4.String(params.Before),
 			}
 			if err := client.Query(ctx, &q, vars); err != nil {
 				return mcp.NewToolResultError(err.Error()), nil

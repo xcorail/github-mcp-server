@@ -643,6 +643,10 @@ export GITHUB_MCP_TOOL_ADD_ISSUE_COMMENT_DESCRIPTION="an alternative description
 - **list_discussion_categories** - List discussion categories for a repository, with their IDs and names
   - `owner`: Repository owner (string, required)
   - `repo`: Repository name (string, required)
+  - `first`: Pagination - Number of categories to return per page (number, optional, min 1, max 100)
+  - `last`: Pagination - Number of categories to return from the end (number, optional, min 1, max 100)
+  - `after`: Pagination - Cursor to start with (string, optional)
+  - `before`: Pagination - Cursor to end with (string, optional)
 
 ## Resources
 
