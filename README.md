@@ -623,7 +623,9 @@ export GITHUB_MCP_TOOL_ADD_ISSUE_COMMENT_DESCRIPTION="an alternative description
   - `categoryId`: Filter by category ID (string, optional)
   - `since`: Filter by date (ISO 8601 timestamp) (string, optional)
   - `first`: Pagination - Number of records to retrieve (number, optional)
+  - `last`: Pagination - Number of records to retrieve from the end (number, optional)
   - `after`: Pagination - Cursor to start with (string, optional)
+  - `before`: Pagination - Cursor to end with (string, optional)
   - `sort`: Sort by ('CREATED_AT', 'UPDATED_AT') (string, optional)
   - `direction`: Sort direction ('ASC', 'DESC') (string, optional)
 

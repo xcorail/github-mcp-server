@@ -50,8 +50,16 @@ func ListDiscussions(getGQLClient GetGQLClientFn, t translations.TranslationHelp
 				mcp.Min(1),
 				mcp.Max(100),
 			),
+			mcp.WithNumber("last",
+				mcp.Description("Number of discussions to return from the end (min 1, max 100)"),
+				mcp.Min(1),
+				mcp.Max(100),
+			),
 			mcp.WithString("after",
 				mcp.Description("Cursor for pagination, use the 'after' field from the previous response"),
+			),
+			mcp.WithString("before",
+				mcp.Description("Cursor for pagination, use the 'before' field from the previous response"),
 			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -64,10 +72,24 @@ func ListDiscussions(getGQLClient GetGQLClientFn, t translations.TranslationHelp
 				Sort       string
 				Direction  string
 				First      int32
+				Last       int32
 				After      string
+				Before     string
 			}
 			if err := mapstructure.Decode(request.Params.Arguments, &params); err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if params.First != 0 && params.Last != 0 {
+				return mcp.NewToolResultError("only one of 'first' or 'last' may be specified"), nil
+			}
+			if params.After != "" && params.Before != "" {
+				return mcp.NewToolResultError("only one of 'after' or 'before' may be specified"), nil
+			}
+			if params.After != "" && params.Last != 0 {
+				return mcp.NewToolResultError("'after' cannot be used with 'last'. Did you mean to use 'before' instead?"), nil
+			}
+			if params.Before != "" && params.First != 0 {
+				return mcp.NewToolResultError("'before' cannot be used with 'first'. Did you mean to use 'after' instead?"), nil
 			}
 			// Get GraphQL client
 			client, err := getGQLClient(ctx)
@@ -87,7 +109,7 @@ func ListDiscussions(getGQLClient GetGQLClientFn, t translations.TranslationHelp
 							} `graphql:"category"`
 							URL githubv4.String `graphql:"url"`
 						}
-					} `graphql:"discussions(categoryId: $categoryId, orderBy: {field: $sort, direction: $direction}, first: $first, after: $after)"`
+					} `graphql:"discussions(categoryId: $categoryId, orderBy: {field: $sort, direction: $direction}, first: $first, after: $after, last: $last, before: $before)"`
 				} `graphql:"repository(owner: $owner, name: $repo)"`
 			}
 			// Build query variables
@@ -98,7 +120,9 @@ func ListDiscussions(getGQLClient GetGQLClientFn, t translations.TranslationHelp
 				"sort":       githubv4.DiscussionOrderField(params.Sort),
 				"direction":  githubv4.OrderDirection(params.Direction),
 				"first":      githubv4.Int(params.First),
+				"last":       githubv4.Int(params.Last),
 				"after":      githubv4.String(params.After),
+				"before":     githubv4.String(params.Before),
 			}
 			// Execute query
 			if err := client.Query(ctx, &q, vars); err != nil {

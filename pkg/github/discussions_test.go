@@ -55,7 +55,7 @@ func Test_ListDiscussions(t *testing.T) {
 					} `graphql:"category"`
 					URL githubv4.String `graphql:"url"`
 				}
-			} `graphql:"discussions(categoryId: $categoryId, orderBy: {field: $sort, direction: $direction}, first: $first, after: $after)"`
+			} `graphql:"discussions(categoryId: $categoryId, orderBy: {field: $sort, direction: $direction}, first: $first, after: $after, last: $last, before: $before)"`
 		} `graphql:"repository(owner: $owner, name: $repo)"`
 	}
 
@@ -66,7 +66,9 @@ func Test_ListDiscussions(t *testing.T) {
 		"sort":       githubv4.DiscussionOrderField(""),
 		"direction":  githubv4.OrderDirection(""),
 		"first":      githubv4.Int(0),
+		"last":       githubv4.Int(0),
 		"after":      githubv4.String(""),
+		"before":     githubv4.String(""),
 	}
 
 	varsListInvalid := map[string]interface{}{
@@ -76,7 +78,9 @@ func Test_ListDiscussions(t *testing.T) {
 		"sort":       githubv4.DiscussionOrderField(""),
 		"direction":  githubv4.OrderDirection(""),
 		"first":      githubv4.Int(0),
+		"last":       githubv4.Int(0),
 		"after":      githubv4.String(""),
+		"before":     githubv4.String(""),
 	}
 
 	varsListWithCategory := map[string]interface{}{
@@ -86,7 +90,9 @@ func Test_ListDiscussions(t *testing.T) {
 		"sort":       githubv4.DiscussionOrderField(""),
 		"direction":  githubv4.OrderDirection(""),
 		"first":      githubv4.Int(0),
+		"last":       githubv4.Int(0),
 		"after":      githubv4.String(""),
+		"before":     githubv4.String(""),
 	}
 
 	tests := []struct {
@@ -143,6 +149,58 @@ func Test_ListDiscussions(t *testing.T) {
 			response:    mockResponseListAll,
 			expectError: false,
 			expectedIds: []int64{2, 3},
+		},
+		{
+			name: "both first and last parameters provided",
+			vars: varsListAll, // vars don't matter since error occurs before GraphQL call
+			reqParams: map[string]interface{}{
+				"owner": "owner",
+				"repo":  "repo",
+				"first": int32(10),
+				"last":  int32(5),
+			},
+			response:    mockResponseListAll, // response doesn't matter since error occurs before GraphQL call
+			expectError: true,
+			errContains: "only one of 'first' or 'last' may be specified",
+		},
+		{
+			name: "after with last parameters provided",
+			vars: varsListAll, // vars don't matter since error occurs before GraphQL call
+			reqParams: map[string]interface{}{
+				"owner": "owner",
+				"repo":  "repo",
+				"after": "cursor123",
+				"last":  int32(5),
+			},
+			response:    mockResponseListAll, // response doesn't matter since error occurs before GraphQL call
+			expectError: true,
+			errContains: "'after' cannot be used with 'last'. Did you mean to use 'before' instead?",
+		},
+		{
+			name: "before with first parameters provided",
+			vars: varsListAll, // vars don't matter since error occurs before GraphQL call
+			reqParams: map[string]interface{}{
+				"owner":  "owner",
+				"repo":   "repo",
+				"before": "cursor456",
+				"first":  int32(10),
+			},
+			response:    mockResponseListAll, // response doesn't matter since error occurs before GraphQL call
+			expectError: true,
+			errContains: "'before' cannot be used with 'first'. Did you mean to use 'after' instead?",
+		},
+		{
+			name: "both after and before parameters provided",
+			vars: varsListAll, // vars don't matter since error occurs before GraphQL call
+			reqParams: map[string]interface{}{
+				"owner":  "owner",
+				"repo":   "repo",
+				"after":  "cursor123",
+				"before": "cursor456",
+			},
+			response:    mockResponseListAll, // response doesn't matter since error occurs before GraphQL call
+			expectError: true,
+			errContains: "only one of 'after' or 'before' may be specified",
 		},
 	}
 
