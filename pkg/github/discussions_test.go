@@ -42,7 +42,48 @@ func Test_ListDiscussions(t *testing.T) {
 	assert.Contains(t, toolDef.InputSchema.Properties, "repo")
 	assert.ElementsMatch(t, toolDef.InputSchema.Required, []string{"owner", "repo"})
 
-	// GraphQL query struct
+	// mock for the call to list all categories: query struct, variables, response
+	var q_cat struct {
+		Repository struct {
+			DiscussionCategories struct {
+				Nodes []struct {
+					ID   githubv4.ID
+					Name githubv4.String
+				}
+				PageInfo struct {
+					HasNextPage githubv4.Boolean
+					EndCursor   githubv4.String
+				}
+			} `graphql:"discussionCategories(first: 100, after: $after)"`
+		} `graphql:"repository(owner: $owner, name: $repo)"`
+	}
+
+	vars_cat := map[string]interface{}{
+		"owner": githubv4.String("owner"),
+		"repo":  githubv4.String("repo"),
+		"after": githubv4.String(""),
+	}
+
+	vars_cat_invalid := map[string]interface{}{
+		"owner": githubv4.String("invalid"),
+		"repo":  githubv4.String("repo"),
+		"after": githubv4.String(""),
+	}
+
+	mockResp_cat := githubv4mock.DataResponse(map[string]any{
+		"repository": map[string]any{
+			"discussionCategories": map[string]any{
+				"nodes": []map[string]any{
+					{"id": "123", "name": "CategoryOne"},
+					{"id": "456", "name": "CategoryTwo"},
+				},
+			},
+		},
+	})
+
+	mockResp_cat_invalid := githubv4mock.ErrorResponse("repository not found")
+
+	// mock for the call to ListDiscussions: query struct, variables, response
 	var q struct {
 		Repository struct {
 			Discussions struct {
@@ -88,7 +129,7 @@ func Test_ListDiscussions(t *testing.T) {
 	varsListWithCategory := map[string]interface{}{
 		"owner":      githubv4.String("owner"),
 		"repo":       githubv4.String("repo"),
-		"categoryId": githubv4.ID("12345"),
+		"categoryId": githubv4.ID("123"),
 		"sort":       githubv4.DiscussionOrderField(""),
 		"direction":  githubv4.OrderDirection(""),
 		"first":      githubv4.Int(0),
@@ -98,6 +139,9 @@ func Test_ListDiscussions(t *testing.T) {
 		"answered":   githubv4.Boolean(false),
 	}
 
+	catMatcher := githubv4mock.NewQueryMatcher(q_cat, vars_cat, mockResp_cat)
+	catMatcherInvalid := githubv4mock.NewQueryMatcher(q_cat, vars_cat_invalid, mockResp_cat_invalid)
+
 	tests := []struct {
 		name        string
 		vars        map[string]interface{}
@@ -106,6 +150,7 @@ func Test_ListDiscussions(t *testing.T) {
 		expectError bool
 		expectedIds []int64
 		errContains string
+		catMatcher  githubv4mock.Matcher
 	}{
 		{
 			name: "list all discussions",
@@ -117,6 +162,7 @@ func Test_ListDiscussions(t *testing.T) {
 			response:    mockResponseListAll,
 			expectError: false,
 			expectedIds: []int64{1, 2, 3},
+			catMatcher:  catMatcher,
 		},
 		{
 			name: "invalid owner or repo",
@@ -128,18 +174,20 @@ func Test_ListDiscussions(t *testing.T) {
 			response:    mockErrorRepoNotFound,
 			expectError: true,
 			errContains: "repository not found",
+			catMatcher:  catMatcherInvalid,
 		},
 		{
 			name: "list discussions with category",
 			vars: varsListWithCategory,
 			reqParams: map[string]interface{}{
-				"owner":      "owner",
-				"repo":       "repo",
-				"categoryId": "12345",
+				"owner":    "owner",
+				"repo":     "repo",
+				"category": "CategoryOne", // This should match the ID "123" in the mock response
 			},
 			response:    mockResponseCategory,
 			expectError: false,
 			expectedIds: []int64{1},
+			catMatcher:  catMatcher,
 		},
 		{
 			name: "list discussions with since date",
@@ -152,6 +200,7 @@ func Test_ListDiscussions(t *testing.T) {
 			response:    mockResponseListAll,
 			expectError: false,
 			expectedIds: []int64{2, 3},
+			catMatcher:  catMatcher,
 		},
 		{
 			name: "both first and last parameters provided",
@@ -165,6 +214,7 @@ func Test_ListDiscussions(t *testing.T) {
 			response:    mockResponseListAll, // response doesn't matter since error occurs before GraphQL call
 			expectError: true,
 			errContains: "only one of 'first' or 'last' may be specified",
+			catMatcher:  catMatcher,
 		},
 		{
 			name: "after with last parameters provided",
@@ -178,6 +228,7 @@ func Test_ListDiscussions(t *testing.T) {
 			response:    mockResponseListAll, // response doesn't matter since error occurs before GraphQL call
 			expectError: true,
 			errContains: "'after' cannot be used with 'last'. Did you mean to use 'before' instead?",
+			catMatcher:  catMatcher,
 		},
 		{
 			name: "before with first parameters provided",
@@ -191,6 +242,7 @@ func Test_ListDiscussions(t *testing.T) {
 			response:    mockResponseListAll, // response doesn't matter since error occurs before GraphQL call
 			expectError: true,
 			errContains: "'before' cannot be used with 'first'. Did you mean to use 'after' instead?",
+			catMatcher:  catMatcher,
 		},
 		{
 			name: "both after and before parameters provided",
@@ -204,13 +256,14 @@ func Test_ListDiscussions(t *testing.T) {
 			response:    mockResponseListAll, // response doesn't matter since error occurs before GraphQL call
 			expectError: true,
 			errContains: "only one of 'after' or 'before' may be specified",
+			catMatcher:  catMatcher,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			matcher := githubv4mock.NewQueryMatcher(q, tc.vars, tc.response)
-			httpClient := githubv4mock.NewMockedHTTPClient(matcher)
+			httpClient := githubv4mock.NewMockedHTTPClient(matcher, tc.catMatcher)
 			gqlClient := githubv4.NewClient(httpClient)
 			_, handler := ListDiscussions(stubGetGQLClientFn(gqlClient), translations.NullTranslationHelper)
 
@@ -416,10 +469,10 @@ func Test_ListDiscussionCategories(t *testing.T) {
 	vars := map[string]interface{}{
 		"owner":  githubv4.String("owner"),
 		"repo":   githubv4.String("repo"),
-		"first":  githubv4.Int(0),
-		"last":   githubv4.Int(0),
-		"after":  githubv4.String(""),
-		"before": githubv4.String(""),
+		"first":  githubv4.Int(0),     // Default to 100 categories
+		"last":   githubv4.Int(0),     // Not used, but required by schema
+		"after":  githubv4.String(""), // Not used, but required by schema
+		"before": githubv4.String(""), // Not used, but required by schema
 	}
 	mockResp := githubv4mock.DataResponse(map[string]any{
 		"repository": map[string]any{

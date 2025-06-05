@@ -620,7 +620,7 @@ export GITHUB_MCP_TOOL_ADD_ISSUE_COMMENT_DESCRIPTION="an alternative description
 - **list_discussions** - List discussions for a repository
   - `owner`: Repository owner (string, required)
   - `repo`: Repository name (string, required)
-  - `categoryId`: Filter by category ID (string, optional)
+  - `category`: Filter by category name (string, optional)
   - `since`: Filter by date (ISO 8601 timestamp) (string, optional)
   - `first`: Pagination - Number of records to retrieve (number, optional)
   - `last`: Pagination - Number of records to retrieve from the end (number, optional)

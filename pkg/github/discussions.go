@@ -14,6 +14,56 @@ import (
 	"github.com/shurcooL/githubv4"
 )
 
+// GetAllDiscussionCategories retrieves all discussion categories for a repository
+// by paginating through all pages and returns them as a map where the key is the
+// category name and the value is the category ID.
+func GetAllDiscussionCategories(ctx context.Context, client *githubv4.Client, owner, repo string) (map[string]string, error) {
+	categories := make(map[string]string)
+	var after string
+	hasNextPage := true
+
+	for hasNextPage {
+		// Prepare GraphQL query with pagination
+		var q struct {
+			Repository struct {
+				DiscussionCategories struct {
+					Nodes []struct {
+						ID   githubv4.ID
+						Name githubv4.String
+					}
+					PageInfo struct {
+						HasNextPage githubv4.Boolean
+						EndCursor   githubv4.String
+					}
+				} `graphql:"discussionCategories(first: 100, after: $after)"`
+			} `graphql:"repository(owner: $owner, name: $repo)"`
+		}
+
+		vars := map[string]interface{}{
+			"owner": githubv4.String(owner),
+			"repo":  githubv4.String(repo),
+			"after": githubv4.String(after),
+		}
+
+		if err := client.Query(ctx, &q, vars); err != nil {
+			return nil, fmt.Errorf("failed to query discussion categories: %w", err)
+		}
+
+		// Add categories to the map
+		for _, category := range q.Repository.DiscussionCategories.Nodes {
+			categories[string(category.Name)] = fmt.Sprint(category.ID)
+		}
+
+		// Check if there are more pages
+		hasNextPage = bool(q.Repository.DiscussionCategories.PageInfo.HasNextPage)
+		if hasNextPage {
+			after = string(q.Repository.DiscussionCategories.PageInfo.EndCursor)
+		}
+	}
+
+	return categories, nil
+}
+
 func ListDiscussions(getGQLClient GetGQLClientFn, t translations.TranslationHelperFunc) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("list_discussions",
 			mcp.WithDescription(t("TOOL_LIST_DISCUSSIONS_DESCRIPTION", "List discussions for a repository")),
@@ -29,8 +79,8 @@ func ListDiscussions(getGQLClient GetGQLClientFn, t translations.TranslationHelp
 				mcp.Required(),
 				mcp.Description("Repository name"),
 			),
-			mcp.WithString("categoryId",
-				mcp.Description("Category ID filter"),
+			mcp.WithString("category",
+				mcp.Description("Category filter (name)"),
 			),
 			mcp.WithString("since",
 				mcp.Description("Filter by date (ISO 8601 timestamp)"),
@@ -68,17 +118,17 @@ func ListDiscussions(getGQLClient GetGQLClientFn, t translations.TranslationHelp
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			// Decode params
 			var params struct {
-				Owner      string
-				Repo       string
-				CategoryID string
-				Since      string
-				Sort       string
-				Direction  string
-				First      int32
-				Last       int32
-				After      string
-				Before     string
-				Answered   bool
+				Owner     string
+				Repo      string
+				Category  string
+				Since     string
+				Sort      string
+				Direction string
+				First     int32
+				Last      int32
+				After     string
+				Before    string
+				Answered  bool
 			}
 			if err := mapstructure.Decode(request.Params.Arguments, &params); err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
@@ -116,11 +166,19 @@ func ListDiscussions(getGQLClient GetGQLClientFn, t translations.TranslationHelp
 					} `graphql:"discussions(categoryId: $categoryId, orderBy: {field: $sort, direction: $direction}, first: $first, after: $after, last: $last, before: $before, answered: $answered)"`
 				} `graphql:"repository(owner: $owner, name: $repo)"`
 			}
+			categories, err := GetAllDiscussionCategories(ctx, client, params.Owner, params.Repo)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("failed to get discussion categories: %v", err)), nil
+			}
+			var categoryID githubv4.ID = categories[params.Category]
+			if categoryID == "" && params.Category != "" {
+				return mcp.NewToolResultError(fmt.Sprintf("category '%s' not found", params.Category)), nil
+			}
 			// Build query variables
 			vars := map[string]interface{}{
 				"owner":      githubv4.String(params.Owner),
 				"repo":       githubv4.String(params.Repo),
-				"categoryId": githubv4.ID(params.CategoryID),
+				"categoryId": categoryID,
 				"sort":       githubv4.DiscussionOrderField(params.Sort),
 				"direction":  githubv4.OrderDirection(params.Direction),
 				"first":      githubv4.Int(params.First),
