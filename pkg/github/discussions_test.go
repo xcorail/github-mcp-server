@@ -43,7 +43,7 @@ func Test_ListDiscussions(t *testing.T) {
 	assert.ElementsMatch(t, toolDef.InputSchema.Required, []string{"owner", "repo"})
 
 	// mock for the call to list all categories: query struct, variables, response
-	var q_cat struct {
+	var qCat struct {
 		Repository struct {
 			DiscussionCategories struct {
 				Nodes []struct {
@@ -58,19 +58,19 @@ func Test_ListDiscussions(t *testing.T) {
 		} `graphql:"repository(owner: $owner, name: $repo)"`
 	}
 
-	vars_cat := map[string]interface{}{
+	varsCat := map[string]interface{}{
 		"owner": githubv4.String("owner"),
 		"repo":  githubv4.String("repo"),
 		"after": githubv4.String(""),
 	}
 
-	vars_cat_invalid := map[string]interface{}{
+	varsCatInvalid := map[string]interface{}{
 		"owner": githubv4.String("invalid"),
 		"repo":  githubv4.String("repo"),
 		"after": githubv4.String(""),
 	}
 
-	mockResp_cat := githubv4mock.DataResponse(map[string]any{
+	mockRespCat := githubv4mock.DataResponse(map[string]any{
 		"repository": map[string]any{
 			"discussionCategories": map[string]any{
 				"nodes": []map[string]any{
@@ -81,7 +81,7 @@ func Test_ListDiscussions(t *testing.T) {
 		},
 	})
 
-	mockResp_cat_invalid := githubv4mock.ErrorResponse("repository not found")
+	mockRespCatInvalid := githubv4mock.ErrorResponse("repository not found")
 
 	// mock for the call to ListDiscussions: query struct, variables, response
 	var q struct {
@@ -139,8 +139,8 @@ func Test_ListDiscussions(t *testing.T) {
 		"answered":   githubv4.Boolean(false),
 	}
 
-	catMatcher := githubv4mock.NewQueryMatcher(q_cat, vars_cat, mockResp_cat)
-	catMatcherInvalid := githubv4mock.NewQueryMatcher(q_cat, vars_cat_invalid, mockResp_cat_invalid)
+	catMatcher := githubv4mock.NewQueryMatcher(qCat, varsCat, mockRespCat)
+	catMatcherInvalid := githubv4mock.NewQueryMatcher(qCat, varsCatInvalid, mockRespCatInvalid)
 
 	tests := []struct {
 		name        string
