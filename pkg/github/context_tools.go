@@ -3,6 +3,7 @@ package github
 import (
 	"context"
 
+	ghErrors "github.com/github/github-mcp-server/pkg/errors"
 	"github.com/github/github-mcp-server/pkg/translations"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -14,7 +15,7 @@ func GetMe(getClient GetClientFn, t translations.TranslationHelperFunc) (mcp.Too
 		mcp.WithDescription(t("TOOL_GET_ME_DESCRIPTION", "Get details of the authenticated GitHub user. Use this when a request includes \"me\", \"my\". The output will not change unless the user changes their profile, so only call this once.")),
 		mcp.WithToolAnnotation(mcp.ToolAnnotation{
 			Title:        t("TOOL_GET_ME_USER_TITLE", "Get my user profile"),
-			ReadOnlyHint: toBoolPtr(true),
+			ReadOnlyHint: ToBoolPtr(true),
 		}),
 		mcp.WithString("reason",
 			mcp.Description("Optional: the reason for requesting the user information"),
@@ -28,9 +29,13 @@ func GetMe(getClient GetClientFn, t translations.TranslationHelperFunc) (mcp.Too
 			return mcp.NewToolResultErrorFromErr("failed to get GitHub client", err), nil
 		}
 
-		user, _, err := client.Users.Get(ctx, "")
+		user, res, err := client.Users.Get(ctx, "")
 		if err != nil {
-			return mcp.NewToolResultErrorFromErr("failed to get user", err), nil
+			return ghErrors.NewGitHubAPIErrorResponse(ctx,
+				"failed to get user",
+				res,
+				err,
+			), nil
 		}
 
 		return MarshalledTextResult(user), nil
