@@ -166,13 +166,7 @@ func DefaultToolsetGroup(readOnly bool, getClient GetClientFn, getGQLClient GetG
 	tsg.AddToolset(experiments)
 	tsg.AddToolset(discussions)
 
-	// Enable the requested features
-
-	if err := tsg.EnableToolsets(passedToolsets); err != nil {
-		return nil, err
-	}
-
-	return tsg, nil
+	return tsg
 }
 
 // InitDynamicToolset creates a dynamic toolset that can be used to enable other toolsets, and so requires the server and toolset group as arguments
